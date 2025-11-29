@@ -1,57 +1,59 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const bodyParser = require("body-parser");
-const cors = require("cors");
+import mongoose from "mongoose";
+import Appointment from "./models/Appointment.js";
+import TradeIn from "./models/TradeIn.js";
+import MissedCall from "./models/MissedCall.js";
 
-// Models
-const Appointment = require("./models/Appointment");
-const TradeIn = require("./models/TradeIn");
-const MissedCall = require("./models/MissedCall");
+const MONGO_URI = process.env.MONGODB_URI;
 
-const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+// Ensure MongoDB connection (Vercel cold start safe)
+let isConnected = false;
+async function connectDB() {
+  if (isConnected) return;
+  await mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+  isConnected = true;
+}
 
-// Connect to MongoDB
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+/**
+ * Main API handler
+ */
+export default async function handler(req, res) {
+  await connectDB();
 
-// Health Route
-app.get("/", (req, res) => {
-  res.json({ message: "Car Dealership API is running." });
-});
-
-// Create Appointment
-app.post("/api/appointment", async (req, res) => {
-  try {
-    const saved = await Appointment.create(req.body);
-    res.json(saved);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+  // Health check
+  if (req.method === "GET") {
+    return res.status(200).json({ message: "Car Dealer API is running." });
   }
-});
 
-// Create Trade-In
-app.post("/api/trade-in", async (req, res) => {
-  try {
-    const saved = await TradeIn.create(req.body);
-    res.json(saved);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+  // Create Appointment
+  if (req.method === "POST" && req.url === "/appointment") {
+    try {
+      const saved = await Appointment.create(req.body);
+      return res.status(201).json(saved);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
   }
-});
 
-// Log missed call
-app.post("/api/missed-call", async (req, res) => {
-  try {
-    const saved = await MissedCall.create(req.body);
-    res.json(saved);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+  // Create Trade-in
+  if (req.method === "POST" && req.url === "/trade-in") {
+    try {
+      const saved = await TradeIn.create(req.body);
+      return res.status(201).json(saved);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
   }
-});
 
-// Export for Vercel
-module.exports = app;
+  // Missed Call Recovery
+  if (req.method === "POST" && req.url === "/missed-call") {
+    try {
+      const saved = await MissedCall.create(req.body);
+      return res.status(201).json(saved);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+  }
+
+  // Fallback for unknown route
+  return res.status(404).json({ error: "Endpoint not found" });
+}
